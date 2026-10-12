@@ -1,0 +1,29 @@
+# Local-only AI assistant guide
+CLAUDE.md
+.claude/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.ruff_cache/
+.pytest_cache/
+
+# Gradio
+.gradio/
+flagged/
+
+# Test inputs and conversion outputs
+samples/
+output/
+*.md
+!README.md
+
+# OS / editor
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+*.swp

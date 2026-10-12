@@ -1,0 +1,8 @@
+# Normalize line endings so launchers work on each OS
+* text=auto
+*.bat     text eol=crlf
+*.sh      text eol=lf
+*.py      text eol=lf
+*.desktop text eol=lf
+*.png     binary
+*.ico     binary
