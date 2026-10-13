@@ -13,6 +13,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
+import gradio as gr
 from markitdown import (
     FileConversionException,
     MarkItDown,
@@ -64,3 +65,56 @@ def _describe_error(exc: Exception) -> str:
     if isinstance(exc, FileNotFoundError):
         return "File not found."
     return f"Unexpected error ({type(exc).__name__}): {exc}"
+
+
+# --- UI ---------------------------------------------------------------------
+
+# All user-facing strings live here so wording changes (or a future translation)
+# touch one place only.
+TEXT = {
+    "title": "MarkItDown GUI",
+    "subtitle": (
+        "Convert PDF, Word, Excel, PowerPoint, HTML and more to Markdown. "
+        "Files are processed locally and never leave your computer."
+    ),
+    "upload": "File to convert",
+    "convert": "Convert",
+    "preview_tab": "Preview",
+    "source_tab": "Markdown",
+    "no_file": "Please choose a file first.",
+}
+
+
+def on_convert(path: str | None) -> tuple[str, str]:
+    """Gradio handler: return (rendered preview, raw markdown)."""
+    if not path:
+        gr.Warning(TEXT["no_file"])
+        return "", ""
+    result = convert_files([path])[0]
+    if not result.ok:
+        gr.Warning(f"{result.name}: {result.error}")
+        return "", ""
+    return result.markdown, result.markdown
+
+
+def build_ui() -> gr.Blocks:
+    # Files never leave the machine, and neither should usage statistics.
+    with gr.Blocks(title=TEXT["title"], analytics_enabled=False) as demo:
+        gr.Markdown(f"# {TEXT['title']}\n{TEXT['subtitle']}")
+        file_input = gr.File(label=TEXT["upload"], type="filepath")
+        convert_button = gr.Button(TEXT["convert"], variant="primary")
+        with gr.Tabs():
+            with gr.Tab(TEXT["preview_tab"]):
+                preview = gr.Markdown()
+            with gr.Tab(TEXT["source_tab"]):
+                source = gr.Code(language="markdown", interactive=False)
+        convert_button.click(on_convert, inputs=file_input, outputs=[preview, source])
+    return demo
+
+
+if __name__ == "__main__":
+    build_ui().launch(
+        server_name="127.0.0.1",  # never expose to the network
+        inbrowser=True,
+        share=False,
+    )
