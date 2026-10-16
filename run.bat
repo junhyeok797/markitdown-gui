@@ -2,7 +2,8 @@
 rem Launch MarkItDown GUI on Windows, or add/remove its shortcuts.
 rem
 rem   run.bat              start the app (opens in your browser)
-rem   run.bat --install    add shortcuts to the desktop and the Start menu
+rem   run.bat --install    unblock the downloaded files and add shortcuts to
+rem                        the desktop and the Start menu
 rem   run.bat --uninstall  remove those shortcuts
 rem
 rem Kept ASCII-only with CRLF line endings: cmd misreads other encodings and
@@ -67,9 +68,15 @@ pause
 exit /b 1
 
 :install
+rem Files extracted from a downloaded zip carry the "from the internet" mark,
+rem and Smart App Control then refuses to run run.bat on double-click (and so
+rem from the shortcut too). Running --install from a terminal is a deliberate
+rem choice by the user, so remove the mark from the app's own files here.
 rem Paths are passed through environment variables so that quotes or other
 rem special characters in the folder name cannot break the PowerShell command.
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+  "Get-ChildItem -LiteralPath $env:APP_DIR -Recurse -File | Unblock-File;" ^
+  "Write-Host ('Unblocked downloaded files in ' + $env:APP_DIR);" ^
   "$shell = New-Object -ComObject WScript.Shell;" ^
   "foreach ($dir in [Environment]::GetFolderPath('Desktop'), [Environment]::GetFolderPath('Programs')) {" ^
   "  $link = $shell.CreateShortcut((Join-Path $dir $env:SHORTCUT_NAME));" ^
