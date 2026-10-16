@@ -280,22 +280,67 @@ def on_select(name: str | None, markdown_by_name: dict[str, str]) -> tuple[str, 
     return text, text
 
 
-def on_quit(demo: gr.Blocks) -> str:
-    """Stop the server shortly after replying, so the page can show the message.
+def shutdown_server(demo: gr.Blocks) -> None:
+    shutil.rmtree(OUTPUT_DIR, ignore_errors=True)
+    # A clean shutdown lets Gradio delete its cached uploads. It can end the
+    # process itself, so anything that must run goes before this call.
+    demo.close()
+    os._exit(0)  # launch() blocks the main thread; nothing else will end it
 
-    Needed because closing the browser tab does not stop the server, and the
-    Ubuntu launcher runs without a terminal window to close.
+
+def on_quit(demo: gr.Blocks) -> str:
+    """Stop the server shortly after replying, so the page can show the message
+    if the browser refuses to close the tab."""
+    threading.Timer(0.5, shutdown_server, args=(demo,)).start()
+    return TEXT["stopped"]
+
+
+# Browsers only let a script close a tab it opened itself or one with a single
+# history entry. The tab opened at launch qualifies; otherwise the "stopped"
+# message stays visible instead.
+CLOSE_TAB_JS = "() => { setTimeout(() => window.close(), 800); }"
+
+
+class AutoShutdown:
+    """Stop the server once no browser tab is connected.
+
+    Closing the browser tab does not stop a Gradio server, and the desktop
+    launcher has no terminal window to close, so without this the app would
+    keep running in the background. A page refresh also drops the connection
+    briefly, hence the grace period before shutting down.
     """
 
-    def shutdown() -> None:
-        shutil.rmtree(OUTPUT_DIR, ignore_errors=True)
-        # A clean shutdown lets Gradio delete its cached uploads. It can end the
-        # process itself, so anything that must run goes before this call.
-        demo.close()
-        os._exit(0)  # launch() blocks the main thread; nothing else will end it
+    GRACE_SECONDS = 10
 
-    threading.Timer(0.5, shutdown).start()
-    return TEXT["stopped"]
+    def __init__(self, demo: gr.Blocks) -> None:
+        self._demo = demo
+        self._lock = threading.Lock()
+        self._open_tabs = 0
+        self._timer: threading.Timer | None = None
+
+    def tab_opened(self) -> None:
+        with self._lock:
+            self._open_tabs += 1
+            if self._timer:
+                self._timer.cancel()
+                self._timer = None
+
+    def tab_closed(self) -> None:
+        with self._lock:
+            self._open_tabs = max(0, self._open_tabs - 1)
+            if self._open_tabs == 0 and not self._timer:
+                self._timer = threading.Timer(
+                    self.GRACE_SECONDS, self._shutdown_if_idle
+                )
+                self._timer.daemon = True
+                self._timer.start()
+
+    def _shutdown_if_idle(self) -> None:
+        with self._lock:
+            self._timer = None
+            if self._open_tabs:
+                return
+        shutdown_server(self._demo)
 
 
 def build_ui() -> gr.Blocks:
@@ -354,7 +399,13 @@ def build_ui() -> gr.Blocks:
         selector.change(
             on_select, inputs=[selector, markdown_state], outputs=[preview, source]
         )
-        quit_button.click(lambda: on_quit(demo), outputs=stopped_notice)
+        quit_button.click(
+            lambda: on_quit(demo), outputs=stopped_notice, js=CLOSE_TAB_JS
+        )
+
+        auto_shutdown = AutoShutdown(demo)
+        demo.load(auto_shutdown.tab_opened)
+        demo.unload(auto_shutdown.tab_closed)
     return demo
 
 
