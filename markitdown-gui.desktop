@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=MarkItDown GUI
+Comment=Convert documents to Markdown
+Exec=bash "__APP_DIR__/run.sh"
+Icon=__APP_DIR__/icon.png
+Terminal=false
+StartupNotify=false
+Categories=Office;
+Keywords=markdown;convert;pdf;docx;
