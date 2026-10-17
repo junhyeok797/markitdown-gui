@@ -1,10 +1,13 @@
 # /// script
 # requires-python = ">=3.10"
 # dependencies = [
-#     "markitdown[all]",
+#     "markitdown[docx,pdf,pptx,xls,xlsx,outlook]",
 #     "gradio",
 # ]
 # ///
+# Extras are listed instead of markitdown[all] on purpose: "all" adds audio
+# transcription that uploads audio to Google's speech API, plus Azure and
+# YouTube clients. Files must never leave the user's computer.
 """MarkItDown GUI: a local desktop front end for microsoft/markitdown."""
 
 from __future__ import annotations
@@ -56,10 +59,23 @@ def convert_files(paths: Iterable[str | Path]) -> list[Result]:
     for path in paths:
         name = Path(path).name
         try:
-            results.append(Result(name, markdown=convert_file(path)))
+            markdown = convert_file(path)
         except Exception as exc:  # noqa: BLE001 - any failure is reported per file
             results.append(Result(name, error=_describe_error(exc)))
+            continue
+        if markdown.strip():
+            results.append(Result(name, markdown=markdown))
+        else:
+            # Images and audio yield nothing without OCR/transcription, which
+            # would need online services; say so instead of showing "100%".
+            results.append(Result(name, error=NO_TEXT_ERROR))
     return results
+
+
+NO_TEXT_ERROR = (
+    "No text could be extracted. Images and audio are not transcribed, "
+    "because that would require sending them to an online service."
+)
 
 
 def _describe_error(exc: Exception) -> str:
